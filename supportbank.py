@@ -9,11 +9,13 @@ class Person:
     def __init__(self, name):
         self.name = name
 
-    def addFromTrasaction(self, transaction):
+    def addFromTransaction(self, transaction):
         self.transactions.append(transaction)
+        self.owes -= transaction.value
 
     def addToTransaction(self, transaction):
         self.transactions.append(transaction)
+        self.owed += transaction.value
 
 class Transaction:
     date = ''
@@ -35,4 +37,17 @@ people = {}
 with open('Transactions2014.csv', newline='') as f:
     reader = csv.DictReader(f)
     for row in reader:
-        print(row)
+        valAmount = int(row['Amount'].replace('.',''))
+        transact = Transaction(row['Date'], row['From'], row['To'], row['Narrative'], valAmount)
+        
+        if transact.fromPerson not in people.keys():
+            people[transact.fromPerson] = Person(transact.fromPerson)
+        
+        people[transact.fromPerson].addFromTransaction(transact)
+
+        if transact.toPerson not in people.keys():
+            people[transact.toPerson] = Person(transact.toPerson)
+
+        people[transact.toPerson].addToTransaction(transact)
+
+print(people)
