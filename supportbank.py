@@ -1,6 +1,8 @@
 import csv
 import re
 
+from os import path
+
 import logging
 logging.basicConfig(filename='SupportBank.log', filemode='w',
 level=logging.DEBUG)
@@ -45,9 +47,6 @@ def printPoundsPence(value):
     
     return val[:(len(val)-2)] + '.' + val[2:]
 
-allTransactions = []
-people = {}
-
 def listAll(people):
     for person in people.values():
         print("Name: " + person.name)
@@ -62,41 +61,73 @@ def listName(people, name):
 
 datePattern = re.compile("([0-9]{2}\/[0-9]{2}\/[0-9]{4})")
 
-with open('DodgyTransactions2015.csv', newline='') as f:
-    reader = csv.DictReader(f)
-    for row in reader:
-        try:
-            if not datePattern.match(row['Date']):
-                raise DateException()
+allTransactions = []
+people = {}
 
-            valAmount = int(row['Amount'].replace('.',''))
+def loadFile():
+    filename = input("Please eneter a filename to load: ")
+    if not filename == "EXIT":
+        filenamePattern = re.compile("[a-zA-Z0-9\"\*\/\:\<\>\?\\\|]{1,255}[\.]{1}[a-zA-Z0-9]{1,255}")
+        if filenamePattern.match(filename):
+            if path.exists(filename):
+                extension = filename.split('.')[1]
+                if extension == "csv":
+                    processCsv(filename)
+                elif extension == "json":
+                    pass
+                else:
+                    pass
+            else:
+                print("File does not exist")
+                loadFile()
+        else:
+            print("Invalid file name")
+            loadFile()
 
-            transact = Transaction(row['Date'], row['From'], row['To'], row['Narrative'], valAmount)
-        
-            if transact.fromPerson not in people.keys():
-                people[transact.fromPerson] = Person(transact.fromPerson)
+def processCsv(filename):
+    with open(filename, newline='') as f:
+        counter = 0
+        logging.info("Loading file" + str(f.name))
+        reader = csv.DictReader(f)
+        for row in reader:
+            try:
+                if not datePattern.match(row['Date']):
+                    raise DateException()
+
+                valAmount = int(row['Amount'].replace('.',''))
+
+                transact = Transaction(row['Date'], row['From'], row['To'], row['Narrative'], valAmount)
             
-            people[transact.fromPerson].addFromTransaction(transact)
+                if transact.fromPerson not in people.keys():
+                    people[transact.fromPerson] = Person(transact.fromPerson)
+                
+                people[transact.fromPerson].addFromTransaction(transact)
 
-            if transact.toPerson not in people.keys():
-                people[transact.toPerson] = Person(transact.toPerson)
+                if transact.toPerson not in people.keys():
+                    people[transact.toPerson] = Person(transact.toPerson)
 
-            people[transact.toPerson].addToTransaction(transact)
+                people[transact.toPerson].addToTransaction(transact)
 
-        except ValueError:
-            print('')
-            print("WARNING: Ammount for transaction was not numeric")
-            print("         Value Given: " + row['Amount'])
-            print("         on row: " + str(row))
-            print('')
-        except DateException:
-            print('')
-            print("WARNING: Date format incorrect")
-            print("         Value Given: " + row['Date'])
-            print("         on row: " + str(row))
-            print('')
+                counter += 1
+
+            except ValueError:
+                logging.warning("Ammount for transaction was not numeric   Value Given:"  + row['Amount']+  " on row: " + str(counter) )
+
+                print('')
+                print("WARNING: Ammount for transaction was not numeric")
+                print("         Value Given: " + row['Amount'])
+                print("         on row: " + str(counter))
+                print('')
+            except DateException:
+                logging.warning("Date format incorrect   Value Given:"  + row['Date']+  " on row: " + str(counter) )
+
+                print('')
+                print("WARNING: Date format incorrect")
+                print("         Value Given: " + row['Date'])
+                print("         on row: " + str(counter))
+                print('')
         
+        logging.info("Loaded " + str(counter) + " rows")
 
-name = 'Dan W'
-
+loadFile()
 listAll(people)
