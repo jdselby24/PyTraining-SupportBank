@@ -3,6 +3,8 @@ import re
 
 from os import path
 
+import json
+
 import logging
 logging.basicConfig(filename='SupportBank.log', filemode='w',
 level=logging.DEBUG)
@@ -59,7 +61,13 @@ def listName(people, name):
     for transaction in person.transactions:
         print(transaction.date + ' | From:' + transaction.fromPerson + ' | To:' + transaction.toPerson + ' | Narrative:' + transaction.narrative + ' | Amount:' + str(transaction.value))
 
-datePattern = re.compile("([0-9]{2}\/[0-9]{2}\/[0-9]{4})")
+datePattern1 = re.compile("([0-9]{2}\/[0-9]{2}\/[0-9]{4})")
+datePattern2 = re.compile("([0-9]{2}\-[0-9]{2}\-[0-9]{4})")
+datePattern3 = re.compile("([0-9]{2}\.[0-9]{2}\.[0-9]{4})")
+
+datePattern4 = re.compile("([0-9]{4}\/[0-9]{2}\/[0-9]{2})")
+datePattern5 = re.compile("([0-9]{4}\-[0-9]{2}\-[0-9]{2})")
+datePattern6 = re.compile("([0-9]{4}\.[0-9]{2}\.[0-9]{2})")
 
 allTransactions = []
 people = {}
@@ -72,9 +80,11 @@ def loadFile():
             if path.exists(filename):
                 extension = filename.split('.')[1]
                 if extension == "csv":
+                    logging.info("Loading file" + str(filename))
                     processCsv(filename)
                 elif extension == "json":
-                    pass
+                    logging.info("Loading file" + str(filename))
+                    processJson(filename)
                 else:
                     pass
             else:
@@ -86,17 +96,31 @@ def loadFile():
 
 def processCsv(filename):
     with open(filename, newline='') as f:
-        counter = 0
-        logging.info("Loading file" + str(f.name))
         reader = csv.DictReader(f)
-        for row in reader:
+        csvKeySet = {'Date': 'Date', 'From': 'From', 'To': 'To', 'Narrative': 'Narrative', 'Amount': 'Amount'}
+        dictProcessor(reader, csvKeySet)
+        
+def processJson(filename):
+    with open(filename, 'r') as f:
+        json_dict = json.load(f)
+        jsonKeySet = {'Date': 'date', 'From': 'fromAccount', 'To': 'toAccount', 'Narrative': 'narrative', 'Amount': 'amount'}
+        dictProcessor(json_dict, jsonKeySet)
+
+def dictProcessor(dict,keySet):
+    counter = 0
+    for row in dict:
             try:
-                if not datePattern.match(row['Date']):
+                if not (datePattern1.match(row[keySet['Date']]) 
+                or datePattern2.match(row[keySet['Date']]) 
+                or datePattern3.match(row[keySet['Date']])
+                or datePattern4.match(row[keySet['Date']])
+                or datePattern5.match(row[keySet['Date']])
+                or datePattern6.match(row[keySet['Date']])):
                     raise DateException()
 
-                valAmount = int(row['Amount'].replace('.',''))
+                valAmount = int(str(row[keySet['Amount']]).replace('.',''))
 
-                transact = Transaction(row['Date'], row['From'], row['To'], row['Narrative'], valAmount)
+                transact = Transaction(row[keySet['Date']], row[keySet['From']], row[keySet['To']], row[keySet['Narrative']], valAmount)
             
                 if transact.fromPerson not in people.keys():
                     people[transact.fromPerson] = Person(transact.fromPerson)
@@ -111,7 +135,7 @@ def processCsv(filename):
                 counter += 1
 
             except ValueError:
-                logging.warning("Ammount for transaction was not numeric   Value Given:"  + row['Amount']+  " on row: " + str(counter) )
+                logging.warning("Ammount for transaction was not numeric   Value Given:"  + row[keySet['Amount']] +  " on row: " + str(counter) )
 
                 print('')
                 print("WARNING: Ammount for transaction was not numeric")
@@ -119,15 +143,17 @@ def processCsv(filename):
                 print("         on row: " + str(counter))
                 print('')
             except DateException:
-                logging.warning("Date format incorrect   Value Given:"  + row['Date']+  " on row: " + str(counter) )
+                logging.warning("Date format incorrect   Value Given:"  + row[keySet['Date']]+  " on row: " + str(counter) )
 
                 print('')
                 print("WARNING: Date format incorrect")
-                print("         Value Given: " + row['Date'])
+                print("         Value Given: " + row[keySet['Date']])
                 print("         on row: " + str(counter))
                 print('')
         
-        logging.info("Loaded " + str(counter) + " rows")
+    logging.info("Loaded " + str(counter) + " rows")
+
 
 loadFile()
 listAll(people)
+
