@@ -9,6 +9,11 @@ import logging
 logging.basicConfig(filename='SupportBank.log', filemode='w',
 level=logging.DEBUG)
 
+from datetime import date, timedelta
+
+import xmltodict
+import xml.etree.ElementTree as ET
+
 class Person:
     name = ''
     transactions = []
@@ -21,11 +26,11 @@ class Person:
 
     def addFromTransaction(self, transaction):
         self.transactions.append(transaction)
-        self.owes += transaction.value
+        self.owes += int(transaction.value)
 
     def addToTransaction(self, transaction):
         self.transactions.append(transaction)
-        self.owed += transaction.value
+        self.owed += int(transaction.value)
 
 class Transaction:
     date = ''
@@ -61,16 +66,15 @@ def listName(people, name):
     for transaction in person.transactions:
         print(transaction.date + ' | From:' + transaction.fromPerson + ' | To:' + transaction.toPerson + ' | Narrative:' + transaction.narrative + ' | Amount:' + str(transaction.value))
 
-datePattern1 = re.compile("([0-9]{2}\/[0-9]{2}\/[0-9]{4})")
-datePattern2 = re.compile("([0-9]{2}\-[0-9]{2}\-[0-9]{4})")
-datePattern3 = re.compile("([0-9]{2}\.[0-9]{2}\.[0-9]{4})")
-
-datePattern4 = re.compile("([0-9]{4}\/[0-9]{2}\/[0-9]{2})")
-datePattern5 = re.compile("([0-9]{4}\-[0-9]{2}\-[0-9]{2})")
-datePattern6 = re.compile("([0-9]{4}\.[0-9]{2}\.[0-9]{2})")
+datePattern1 = re.compile("([0-9]{2}[\/\-\.]{1}[0-9]{2}[\/\-\.]{1}[0-9]{4})")
+datePattern2 = re.compile("([0-9]{4}[\/\-\.]{1}[0-9]{2}[\/\-\.]{1}[0-9]{2})")
 
 allTransactions = []
 people = {}
+
+def exlDateConverter(delta):
+    origin = date(1900,1,1)
+    return str(origin + timedelta(days=delta))
 
 def loadFile():
     filename = input("Please eneter a filename to load: ")
@@ -85,6 +89,11 @@ def loadFile():
                 elif extension == "json":
                     logging.info("Loading file" + str(filename))
                     processJson(filename)
+
+                elif extension == "xml":
+                    logging.info("Loading file" + str(filename))
+                    processXml(filename)
+
                 else:
                     pass
             else:
@@ -106,54 +115,70 @@ def processJson(filename):
         jsonKeySet = {'Date': 'date', 'From': 'fromAccount', 'To': 'toAccount', 'Narrative': 'narrative', 'Amount': 'amount'}
         dictProcessor(json_dict, jsonKeySet)
 
+def processXml(filename):
+    with open(filename, 'r') as f:
+        counter = 0
+        print(f)
+        tree = ET.parse(f)
+        xml_data = tree.getroot()
+        xmlstr =  ET.tostring(xml_data, encoding='utf-8', method='xml')
+        doc = xmltodict.parse(xmlstr)
+        print(xmlstr)
+        for trnsct in doc['TransactionList']:
+            date = exlDateConverter(trnsct['@Date'])
+            fromAcc = trnsct['Parties']['From']
+            toAcc = trnsct['Parties']['To']
+            narr = trnsct['Description']
+            amo = trnsct['Value']
+
+            rowProcessor(date, fromAcc, toAcc, narr, amo, counter)
+
+            counter + 1
+
+def rowProcessor(date,fromAcc,toAcc,narr,amo, counter):
+    try:
+        if not (datePattern1.match(date)
+        or datePattern2.match(date)):
+            raise DateException()
+
+        valAmmount = int(str(amo).replace('.',''))
+
+        transact = Transaction(date, fromAcc, toAcc, narr, valAmmount)
+
+        if transact.fromPerson not in people.keys():
+            people[transact.fromPerson] = Person(transact.fromPerson)
+
+        people[transact.fromPerson].addFromTransaction(transact)
+
+        if transact.toPerson not in people.keys():
+            people[transact.toPerson] = Person(transact.toPerson)
+
+        people[transact.toPerson].addToTransaction(transact)
+
+    except ValueError:
+        logging.warning("Ammount for transaction was not numeric   Value Given:"  + amo +  " on row: " + str(counter) )
+
+        print('')
+        print("WARNING: Ammount for transaction was not numeric")
+        print("         Value Given: " + amo )
+        print("         on row: " + str(counter))
+        print('')
+    
+    except DateException:
+        logging.warning("Date format incorrect   Value Given:"  + date +  " on row: " + str(counter) )
+
+        print('')
+        print("WARNING: Date format incorrect")
+        print("         Value Given: " + date)
+        print("         on row: " + str(counter))
+        print('')
+
 def dictProcessor(dict,keySet):
     counter = 0
     for row in dict:
-            try:
-                if not (datePattern1.match(row[keySet['Date']]) 
-                or datePattern2.match(row[keySet['Date']]) 
-                or datePattern3.match(row[keySet['Date']])
-                or datePattern4.match(row[keySet['Date']])
-                or datePattern5.match(row[keySet['Date']])
-                or datePattern6.match(row[keySet['Date']])):
-                    raise DateException()
-
-                valAmount = int(str(row[keySet['Amount']]).replace('.',''))
-
-                transact = Transaction(row[keySet['Date']], row[keySet['From']], row[keySet['To']], row[keySet['Narrative']], valAmount)
+            counter + 1
+            rowProcessor(row[keySet['Date']], row[keySet['From']], row[keySet['To']], row[keySet['Narrative']], row[keySet['Amount']], counter)
             
-                if transact.fromPerson not in people.keys():
-                    people[transact.fromPerson] = Person(transact.fromPerson)
-                
-                people[transact.fromPerson].addFromTransaction(transact)
-
-                if transact.toPerson not in people.keys():
-                    people[transact.toPerson] = Person(transact.toPerson)
-
-                people[transact.toPerson].addToTransaction(transact)
-
-                counter += 1
-
-            except ValueError:
-                logging.warning("Ammount for transaction was not numeric   Value Given:"  + row[keySet['Amount']] +  " on row: " + str(counter) )
-
-                print('')
-                print("WARNING: Ammount for transaction was not numeric")
-                print("         Value Given: " + row['Amount'])
-                print("         on row: " + str(counter))
-                print('')
-            except DateException:
-                logging.warning("Date format incorrect   Value Given:"  + row[keySet['Date']]+  " on row: " + str(counter) )
-
-                print('')
-                print("WARNING: Date format incorrect")
-                print("         Value Given: " + row[keySet['Date']])
-                print("         on row: " + str(counter))
-                print('')
-        
-    logging.info("Loaded " + str(counter) + " rows")
-
 
 loadFile()
 listAll(people)
-
