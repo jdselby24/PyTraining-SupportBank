@@ -118,18 +118,16 @@ def processJson(filename):
 def processXml(filename):
     with open(filename, 'r') as f:
         counter = 0
-        print(f)
-        tree = ET.parse(f)
+        tree = ET.parse(filename)
         xml_data = tree.getroot()
         xmlstr =  ET.tostring(xml_data, encoding='utf-8', method='xml')
         doc = xmltodict.parse(xmlstr)
-        print(xmlstr)
-        for trnsct in doc['TransactionList']:
-            date = exlDateConverter(trnsct['@Date'])
-            fromAcc = trnsct['Parties']['From']
-            toAcc = trnsct['Parties']['To']
-            narr = trnsct['Description']
-            amo = trnsct['Value']
+        for trnsct in xml_data:
+            date = exlDateConverter(int(trnsct.get('Date')))
+            fromAcc = trnsct[2][0].text
+            toAcc = trnsct[2][1].text
+            narr = trnsct[0].text
+            amo = trnsct[1].text
 
             rowProcessor(date, fromAcc, toAcc, narr, amo, counter)
 
